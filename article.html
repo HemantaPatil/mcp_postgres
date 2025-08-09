@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>How I Built an AI-Powered USDA Nutrition Database That Answers Any Food Question</title>
+<style>
+  :root{
+    --bg:#ffffff; --text:#0f1724; --muted:#6b7280; --accent:#0ea5a4;
+    --code-bg:#f6f8fa; --max-w:1000px;
+  }
+  body{font-family:Inter, -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:var(--text); background:var(--bg); margin:0; padding:0;}
+  .wrap{max-width:var(--max-w); margin:24px auto; display:grid; grid-template-columns:220px 1fr; gap:24px; padding:20px;}
+  @media (max-width:900px){ .wrap{grid-template-columns:1fr; padding:12px;} .sidebar{order:2} .content{order:1} }
+  .sidebar{position:sticky; top:20px; height:calc(100vh - 40px); overflow:auto; border-right:1px solid #eef2f7; padding-right:16px;}
+  .nav{list-style:none; padding:0; margin:0; font-size:14px;}
+  .nav li{margin:8px 0;}
+  .nav a{color:var(--muted); text-decoration:none;}
+  .nav a:hover{color:var(--text);}
+  .content{padding-left:8px;}
+  header h1{font-size:28px; margin:0 0 6px 0;}
+  header p.lead{margin:0 0 18px 0; color:var(--muted);}
+  section{margin:18px 0; line-height:1.65;}
+  h2{font-size:20px; margin:18px 0 10px;}
+  h3{font-size:16px; margin:14px 0 8px;}
+  pre{background:var(--code-bg); padding:12px; border-radius:8px; overflow:auto; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; font-size:13px;}
+  code.inline{background:#f3f4f6;padding:0.15em 0.35em;border-radius:4px;}
+  ul{margin:8px 0 8px 20px;}
+  table{border-collapse:collapse;width:100%; margin:12px 0;}
+  th,td{border:1px solid #e6edf3;padding:8px;text-align:left;}
+  th{background:#f8fafc;}
+  footer{margin-top:28px;padding-top:10px;border-top:1px solid #eef2f7;color:var(--muted); font-size:14px;}
+  .meta{color:var(--muted); font-size:13px;}
+  .kbd{background:#111827;color:#fff;padding:2px 6px;border-radius:6px;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="sidebar" aria-label="Table of contents">
+    <strong class="meta">On this page</strong>
+    <ul class="nav">
+      <li><a href="#introduction">Introduction</a></li>
+      <li><a href="#mcp">What is MCP?</a></li>
+      <li><a href="#usda">The USDA Database</a></li>
+      <li><a href="#architecture">Architecture Overview</a></li>
+      <li><a href="#technical">Technical Implementation</a></li>
+      <li><a href="#step1">Step 1: Database Setup</a></li>
+      <li><a href="#step2">Step 2: MCP Server Init</a></li>
+      <li><a href="#step3">Step 3: Core Tools</a></li>
+      <li><a href="#features">Key Features</a></li>
+      <li><a href="#claude">Claude Desktop Integration</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="#insights">Insights</a></li>
+      <li><a href="#future">Future Enhancements</a></li>
+      <li><a href="#lessons">Lessons Learned</a></li>
+      <li><a href="#conclusion">Conclusion</a></li>
+      <li><a href="#specs">Technical Specs</a></li>
+    </ul>
+  </nav>
+
+  <main class="content">
+    <header>
+      <h1>How I Built an AI-Powered USDA Nutrition Database That Answers Any Food Question</h1>
+      <p class="lead"><em>Using Anthropic’s Model Context Protocol to turn 250K+ nutrition records into an intelligent, searchable nutrition assistant.</em></p>
+    </header>
+
+    <section id="introduction">
+      <h2>Introduction</h2>
+      <p>Today, having quick and reliable access to nutrition information is a huge advantage. The USDA maintains one of the most comprehensive nutrition databases, with detailed data on over 7,000 foods.</p>
+      <p>Accessing this data programmatically often means writing complex SQL and understanding the schema. I built an MCP server to make this data accessible to AI — so Claude can answer food and nutrition questions directly.</p>
+    </section>
+
+    <section id="mcp">
+      <h2>What is the Model Context Protocol?</h2>
+      <p><strong>MCP</strong> lets AI models connect securely to external tools and data sources. Instead of copying data, the model calls standardized MCP tools to query databases, call APIs, or read files. It’s the bridge between an AI’s language skills and reliable, live data.</p>
+    </section>
+
+    <section id="usda">
+      <h2>The USDA Nutrition Database</h2>
+      <ul>
+        <li><strong>7,146 foods</strong> across 24 categories</li>
+        <li><strong>253,825 nutrition records</strong> covering 136 nutrients</li>
+        <li>Data includes macronutrients, vitamins, minerals, amino acids, and more</li>
+        <li>Trusted, science-backed source used by professionals</li>
+      </ul>
+      <p>The relational structure (foods → nutrients → definitions → sources) makes it ideal for building a robust MCP-backed API for nutrition queries.</p>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture Overview</h2>
+      <p>The server is written in <strong>Python</strong> using:</p>
+      <ul>
+        <li><code class="inline">FastMCP</code> — easy tool registration</li>
+        <li><code class="inline">asyncpg</code> — async PostgreSQL access</li>
+        <li><code class="inline">psycopg2-binary</code> — DB adapter</li>
+      </ul>
+      <p>Connection pooling and async I/O keep responses fast under load.</p>
+    </section>
+
+    <section id="technical">
+      <h2>Technical Implementation</h2>
+      <p>Below are the three core setup steps: database setup, MCP server initialization, and core tools.</p>
+    </section>
+
+    <section id="step1">
+      <h2>Step 1: Database Setup</h2>
+      <p>First, download the USDA data and load it into PostgreSQL.</p>
+
+      <h3>Download USDA data</h3>
+      <p>Get official datasets from USDA FoodData Central:</p>
+      <p><a href="https://fdc.nal.usda.gov/download-datasets.html" target="_blank" rel="noopener">https://fdc.nal.usda.gov/download-datasets.html</a></p>
+      <p>Download either the <strong>Foundation Foods</strong> or <strong>Standard Reference</strong> dataset. Choose the SQL dump if available, or CSVs if you prefer to import manually.</p>
+
+      <h3>Install PostgreSQL</h3>
+      <pre><code>sudo apt-get install postgresql postgresql-contrib
+sudo service postgresql start</code></pre>
+
+      <h3>Create &amp; load the database</h3>
+      <p>If you have an SQL dump:</p>
+      <pre><code>sudo -u postgres createdb usda
+sudo -u postgres psql -d usda -f /path/to/usda_dump.sql</code></pre>
+
+      <p>If you have CSVs, create tables (see USDA docs) and import:</p>
+      <pre><code>CREATE TABLE food_des (...);  -- define schema per USDA
+COPY food_des FROM '/path/to/food_des.csv' CSV HEADER;</code></pre>
+
+      <h3>Verify</h3>
+      <pre><code>sudo -u postgres psql -d usda
+SELECT COUNT(*) FROM food_des;
+SELECT * FROM food_des LIMIT 5;</code></pre>
+    </section>
+
+    <section id="step2">
+      <h2>Step 2: MCP Server Initialization</h2>
+      <p>Initialize FastMCP and set up async connection pooling:</p>
+      <pre><code>import asyncpg
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("usda-postgres")
+
+db_config = {
+    "host": "localhost",
+    "port": 5432,
+    "database": "usda",
+    "user": "postgres",
+    "password": "postgres"
+}
+
+db_pool = None
+
+async def get_db_pool():
+    global db_pool
+    if db_pool is None:
+        db_pool = await asyncpg.create_pool(**db_config)
+    return db_pool</code></pre>
+    </section>
+
+    <section id="step3">
+      <h2>Step 3: Core Database Tools</h2>
+      <p>Expose a small set of tools that solve common problems — not just raw SQL:</p>
+      <ul>
+        <li><code class="inline">execute_query</code> — custom SQL</li>
+        <li><code class="inline">list_tables</code></li>
+        <li><code class="inline">describe_table</code></li>
+        <li><code class="inline">get_table_sample</code></li>
+      </ul>
+
+      <h3>Food search example</h3>
+      <pre><code>@mcp.tool()
+async def search_foods(keyword: str, limit: int = 20) -> str:
+    query = &quot;&quot;&quot;SELECT fd.ndb_no, fd.long_desc, fd.shrt_desc, fg.fddrp_desc as food_group
+    FROM food_des fd
+    JOIN fd_group fg ON fd.fdgrp_cd = fg.fdgrp_cd
+    WHERE fd.long_desc ILIKE $1 OR fd.shrt_desc ILIKE $1
+    ORDER BY fd.long_desc
+    LIMIT $2;&quot;&quot;&quot;
+    return await execute_database_query(query, f&quot;%{keyword}%&quot;, limit)</code></pre>
+    </section>
+
+    <section id="features">
+      <h2>Key Features</h2>
+      <ul>
+        <li><strong>Intelligent search</strong> — keyword, partial, case-insensitive</li>
+        <li><strong>Complete nutrition profiles</strong> — 136 nutrients</li>
+        <li><strong>Category browsing</strong> — 24 food groups</li>
+        <li><strong>Comparative analysis</strong> — side-by-side comparisons</li>
+        <li><strong>Nutrient discovery</strong> — find top foods for a nutrient</li>
+      </ul>
+    </section>
+
+    <section id="claude"> 
+      <h2>Claude Desktop Integration</h2>
+      <p>Configure Claude Desktop to start your MCP server so the model can call tools directly.</p>
+      <pre><code>{
+  "mcpServers": {
+    "usda-postgres": {
+      "command": "python",
+      "args": ["/full/path/to/main.py"]
+    }
+  }
+}</code></pre>
+      <p>Start the server (<code class="inline">python main.py</code>) and launch Claude Desktop. Ask questions in natural language — Claude will call the MCP tools and return structured answers.</p>
+    </section>
+
+    <section id="testing">
+      <h2>Testing the MCP Server</h2>
+      <p>Ways to test:</p>
+      <ul>
+        <li><strong>Claude Desktop</strong> — best end-to-end experience</li>
+        <li><strong>Direct Python</strong> — call tools with <code class="inline">mcp.call_tool()</code></li>
+        <li><strong>MCP Inspector</strong> — interactive web UI for tools</li>
+      </ul>
+
+      <h3>Direct Python test</h3>
+      <pre><code>import asyncio
+from main import mcp
+
+async def test_search():
+    result = await mcp.call_tool("search_foods", {"keyword": "chicken", "limit": 5})
+    print(result)
+
+asyncio.run(test_search())</code></pre>
+
+      <h3>MCP Inspector</h3>
+      <pre><code>npm install -g @modelcontextprotocol/inspector
+mcp-inspector python main.py</code></pre>
+    </section>
+
+    <section id="insights">
+      <h2>Insights from the USDA Database</h2>
+      <ul>
+        <li>Most tracked nutrients: Energy, Folate (DFE), Selenium</li>
+        <li>Largest categories: Vegetables, Beef, Baked products</li>
+        <li>Highest protein foods: Soy protein isolate, dried egg whites, vital wheat gluten</li>
+      </ul>
+    </section>
+
+    <section id="future">
+      <h2>Future Enhancements</h2>
+      <ul>
+        <li>Recipe nutrition analysis</li>
+        <li>Dietary requirement matching</li>
+        <li>Trend and pattern analysis</li>
+        <li>Portion size conversions</li>
+        <li>Caching and full-text search</li>
+      </ul>
+    </section>
+
+    <section id="lessons">
+      <h2>Lessons Learned</h2>
+      <ul>
+        <li>Deep schema understanding is essential</li>
+        <li>User-focused tools beat raw queries</li>
+        <li>Performance tuning matters</li>
+        <li>Handle missing data gracefully</li>
+      </ul>
+    </section>
+
+    <section id="conclusion">
+      <h2>Conclusion</h2>
+      <p>This MCP server turns the USDA nutrition database into a practical AI assistant. By connecting Claude to authoritative data, we get accurate, real-time nutrition answers that are useful for professionals and consumers alike.</p>
+      <p>The next step is to expand features and bring recipe- and diet-level intelligence to the platform.</p>
+    </section>
+
+    <section id="specs">
+      <h2>Technical Specs Summary</h2>
+      <ul>
+        <li>Tools: 10 (4 general DB + 6 nutrition-specific)</li>
+        <li>Data: 7,146 foods, 24 categories, 253,825 nutrition records, 136 nutrients</li>
+        <li>Performance: async, connection pooling, sub-second query responses</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p class="meta">If you'd like the HTML or Markdown file, or the GitHub repo link included, tell me and I’ll add it. Happy to help with screenshots, diagrams, or a README.</p>
+    </footer>
+  </main>
+</div>
+</body>
+</html>
